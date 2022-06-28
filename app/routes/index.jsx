@@ -288,10 +288,13 @@ export default function Index() {
         </div>
       </div > :
         <div className="login-block">
-          <img src="HYLN_original.png" />
+          <img src="green.png" />
           <h2>Fuel Economy Comparison App</h2>
           <Form className="signinform" action="/auth/microsoft" method="post">
-            <button>Login with  <Icon icon="logos:microsoft" inline={true} /></button>
+            <button>Login with  <Icon icon="logos:microsoft" inline={true} /> to verify OAuth2 Functionality</button>
+          </Form>
+          <Form className="signinform" action="/auth/dummy" method="post">
+            <button>Look around with dummy account / access</button>
           </Form>
         </div>}
     </>
@@ -310,7 +313,8 @@ const Nav = () => {
         <li>
           <div className="csv-button"
             onClick={async () => {
-              download(data.csvData, `${new Date()}.csv`);
+              // download(data.csvData, `${new Date()}.csv`);
+              download('/csvs/HY108_20220510_075136.606_10hzData.lvm.csv');
             }}
           >
             Download CSV

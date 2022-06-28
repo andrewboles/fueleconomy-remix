@@ -10,9 +10,6 @@ const microsoftStrategy = new MicrosoftStrategy(
       clientID: process.env.MS_CLIENT_ID || '',
       clientSecret: process.env.MS_CLIENT_SECRET || '',
       callbackURL: process.env.PRIMARY_URL + '/auth/microsoft/callback', 
-      tenant: process.env.MS_TENANT || '',
-      scope: "openid profile email", // optional
-      prompt: "login", 
     },
     async ({ profile }) => {
       console.log(profile)
