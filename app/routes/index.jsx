@@ -314,7 +314,7 @@ const Nav = () => {
           <div className="csv-button"
             onClick={async () => {
               // download(data.csvData, `${new Date()}.csv`);
-              download('/csvs/HY108_20220510_075136.606_10hzData.lvm.csv');
+              download('demodata.zip');
             }}
           >
             Download CSV
