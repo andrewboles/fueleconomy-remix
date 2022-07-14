@@ -109,7 +109,6 @@ const updateMap = (map, data, geos) => {
       source: "speed",
       minzoom: 7,
       paint: {
-        // Size circle radius by earthquake magnitude and zoom level
         "circle-radius": [
           "interpolate",
           ["linear"],
@@ -119,7 +118,6 @@ const updateMap = (map, data, geos) => {
           16,
           ["interpolate", ["linear"], ["get", "speed"], 1, 5, 6, 50],
         ],
-        // Color circle by earthquake magnitude
         "circle-color": [
           "interpolate",
           ["linear"],
@@ -142,7 +140,6 @@ const updateMap = (map, data, geos) => {
 };
 
 export async function action({ request }) {
-  // }
   const forminfo = await unstable_parseMultipartFormData(
     request,
     csvfileupload
@@ -151,15 +148,12 @@ export async function action({ request }) {
   if (fileUpload === "no file uploaded") {
     return null
   }
-
-
   const minlong = forminfo.get("minlong");
   const maxlong = forminfo.get("maxlong");
   const minlat = forminfo.get("minlat");
   const maxlat = forminfo.get("maxlat");
   const minutesDiffStart = forminfo.get('minutesDiffStart')
   const runPercentDiff = forminfo.get('runPercentDiff')
-
   const processingDetails = { minutesDiffStart, runPercentDiff }
 
   let data = await Promise.all(
@@ -179,6 +173,8 @@ export default function Index() {
     maxlat: 35.28734732969582,
   });
 
+  const [downloadedFiles, setDownloadedFiles] = useState(false)
+
   const geos = {
     heldGeos,
     setHeldGeos,
@@ -186,9 +182,7 @@ export default function Index() {
 
   const [defaultRoute, setDefaultRoute] = useState("DEMO ROUTE")
   const data = useActionData();
-
   const transition = useTransition();
-
   const { session } = useLoaderData()
 
   useEffect(() => {
@@ -197,7 +191,6 @@ export default function Index() {
 
       createMaps({ heldGeos, setHeldGeos, defaultRoute });
     }
-
   }, [session?.data?.user]);
 
   useEffect(() => {
@@ -230,14 +223,9 @@ export default function Index() {
               maxlat: 40.23098927819575,
             });
             break
-
         }
-
-
-
       });
     }
-
   }, [defaultRoute, session?.data?.user])
 
   let submitting = transition.state === "submitting";
@@ -276,31 +264,50 @@ export default function Index() {
             </>
           ) : submitting ? (
             <Spinner />
-          ) : (
+          ) : ( downloadedFiles ? 
             <>
-
               <FEForm heldGeos={heldGeos} setHeldGeos={setHeldGeos} defaultRoute={defaultRoute} setDefaultRoute={setDefaultRoute} data={data} />
               <Form method="post" action="/auth/logout">
                 <button type="submit">Logout</button>
               </Form>
-            </>
+            </> : <DownloadPromptBlock setDownloadedFiles={setDownloadedFiles}/>
           )}
         </div>
-      </div > :
-        <div className="login-block">
-          <img src="green.png" />
-          <h2>Fuel Economy Comparison App</h2>
-          <Form className="signinform" action="/auth/microsoft" method="post">
-            <button>Login with  <Icon icon="logos:microsoft" inline={true} /> to verify OAuth2 Functionality</button>
-          </Form>
-          <Form className="signinform" action="/auth/dummy" method="post">
-            <button>Look around with dummy account / access</button>
-          </Form>
-        </div>}
+      </div > : <IntroBlock/>
+        }
     </>
   );
 }
 
+const DownloadPromptBlock = ({setDownloadedFiles}) => {
+
+  const onClick = () => {
+    download('demodata.zip');
+    setDownloadedFiles(true)
+  }
+
+  return(
+    <div>
+      <h2>Click Below to download Anonomized, comma separated value(.lvm) mock fuel economy data. This functionality serves as a demonstration of full-stack React + Node upload/download concepts.</h2>
+      <button onClick={onClick}>Download Mock Data</button>
+    </div>
+  )
+}
+
+const IntroBlock = () => {
+  return (
+    <div className="login-block">
+      <img src="green.png" />
+      <h2>Fuel Economy Comparison App</h2>
+      <Form className="signinform" action="/auth/microsoft" method="post">
+        <button>Login with  <Icon icon="logos:microsoft" inline={true} /> to verify OAuth2 Functionality</button>
+      </Form>
+      <Form className="signinform" action="/auth/dummy" method="post">
+        <button>Look around with dummy account / access</button>
+      </Form>
+    </div>
+  )
+}
 
 const Nav = () => {
   const data = useActionData()
@@ -313,18 +320,17 @@ const Nav = () => {
         <li>
           <div className="csv-button"
             onClick={async () => {
-              // download(data.csvData, `${new Date()}.csv`);
-              download('demodata.zip');
+              download(data.csvData, `${new Date()}.csv`);
             }}
           >
             Download CSV
           </div>
         </li>
-        <li>
+        {/* <li>
           <Form method="post" action="/auth/logout">
             <button type="submit">Logout</button>
           </Form>
-        </li>
+        </li> */}
       </ul>
     </nav>
   );
@@ -333,7 +339,6 @@ const Nav = () => {
 const Selector = ({ defaultRoute, setDefaultRoute, setHeldGeos }) => {
 
   const handleChange = async e => {
-
     await setDefaultRoute(e.target.value)
     switch (e.target.value) {
       case 'DEMO ROUTE':
@@ -352,7 +357,6 @@ const Selector = ({ defaultRoute, setDefaultRoute, setHeldGeos }) => {
           maxlat: 40.23098927819575,
         });
         break
-
     }
   }
 
@@ -384,7 +388,6 @@ const FEForm = ({ heldGeos, setHeldGeos, defaultRoute, setDefaultRoute, data }) 
       <label htmlFor="minlong">
         What is the minimum East/West Longitude
       </label>
-
       <input
         value={heldGeos.minlong}
         onChange={(e) =>
@@ -467,7 +470,6 @@ const FEForm = ({ heldGeos, setHeldGeos, defaultRoute, setDefaultRoute, data }) 
         </>
       )}
     </Form>
-
   );
 };
 
