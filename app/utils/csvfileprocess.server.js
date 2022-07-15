@@ -5,9 +5,11 @@ import fs from 'fs';
 import { parseAsync } from 'json2csv'
 import moment from 'moment-mini'
 
+//this is where the list of filenames to be processed are stored
 export let fileNameArr = []
 export let processedData
 
+//this function converts from LabView fiels (.lvm) to .csv
 const parser = async (fileStream, fileName) => {
     console.log(fileName)
     const path = `/csvs/${fileName}.csv`
@@ -18,13 +20,12 @@ const parser = async (fileStream, fileName) => {
         return "no file uploaded"
     }
 
-
+    //sets "zero" time for a run
     let secondsStart = Number(fileTime.substring(0, 2)) * 3600 + Number(fileTime.substring(2, 4)) * 60 + Number(fileTime.substring(4, 6))
 
     try {
-        console.log("read dir",fs.readdirSync('/csvs'))
-        console.log("Does the folder exist?",fs.existsSync('/csvs'))
-        if (fs.existsSync("/csvs/"+`${fileName}.csv`)) {
+        //check if file exists before marking for conversion
+        if (fs.existsSync("/csvs/" + `${fileName}.csv`)) {
             fileNameArr.push(`${fileName}`)
             console.log(`file ${fileName} already exists, no need to upload`)
             return fileName
@@ -49,14 +50,13 @@ const parser = async (fileStream, fileName) => {
                 relax_column_count: true
             }))
                 .pipe(transform(function (data) {
-                    /* if (data['Email'] === '(Not disclosed)') return null; */
+                    //Transform format/unit of GPS coordinates
                     let lat = Number(data['Latitude'].slice(0, 2)) + Number(data['Latitude'].slice(2, 7) / 60);
                     let long = -Number(data['Longitude'].slice(0, 2)) - Number(data['Longitude'].slice(2, 7) / 60);
                     let time = secondsStart + Number(data['X_Value'])
-                    // Skip data we don't want
+
 
                     // Transform data to a new structure
-
                     return { Time: time, Latitude: lat, Longitude: long, GroundSpeedGPS: data['GroundSpeedGPS'], FuelInletTemp: data['FuelInletTemp'], FuelOutletTemp: data['FuelOutletTemp'], FuelMeterInlet_ccAmount: data['FuelMeterInlet_ccAmount'], FuelMeterInlet_ccRate: data['FuelMeterInlet_ccRate'], FuelMeterOutlet_ccAmount: data['FuelMeterOutlet_ccAmount'], FuelMeterOutlet_ccRate: data['FuelMeterOutlet_ccRate'] };
                 }))
                 .pipe(stringify({
@@ -68,7 +68,7 @@ const parser = async (fileStream, fileName) => {
                     // columns: ["Latitude", "Longitude", "GroundSpeedGPS"]
                     columns: ["Time", "Latitude", "Longitude", "GroundSpeedGPS", "FuelInletTemp", "FuelOutletTemp", "FuelMeterInlet_ccAmount", "FuelMeterInlet_ccRate", "FuelMeterOutlet_ccAmount", "FuelMeterOutlet_ccRate"]
                 }))
-                .pipe(fs.createWriteStream("/csvs/"+`${fileName}.csv`))
+                .pipe(fs.createWriteStream("/csvs/" + `${fileName}.csv`))
                 .on('finish', () => {
 
                     console.log(`Done with csv conversion on ${fileName} 🍻 `);
@@ -93,16 +93,12 @@ export const csvfileupload = async ({
     return await parser(fileStream, filename);
 };
 
-
+//This function creates runs by flipping an "on switch" when the vehicle's data enters the geofence, 
+// and flipping it off when it leaves the geofence
 export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) => {
 
     let finalData = []
     let onSwitch = false
-
-    // if (filename in processedData){
-    //     console.log("data already exists, skipping mutate step")
-    //     return processedData.filename
-    // }
 
     let thisSegmentFuelUsedInGrams = 0
     let data = {
@@ -136,6 +132,7 @@ export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) =>
 
     }
 
+    //this function stashes the data after applying lots of unit conversions
     const stashData = () => {
         data.duration = data.count * 0.1 / 60
         data.avgSpeed = data.dist / data.duration
@@ -147,7 +144,7 @@ export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) =>
         data.avgSpeed = Number.parseFloat(data.avgSpeed * 0.621371 * 60).toFixed(1)
         data.duration = Number.parseFloat(data.duration).toFixed(2)
         processedData = { ...processedData, filename: data }
-        if(data.dist>40){
+        if (data.dist > 40) {
             console.log("dist", data.dist)
             console.log("start time", new Date(data.startTime * 1000).toUTCString().substring(17, 22))
             console.log("start date", data.startDate)
@@ -162,7 +159,7 @@ export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) =>
     }
 
     await new Promise((resolve) => {
-        fs.createReadStream("/csvs/"+`${filename}.csv`)
+        fs.createReadStream("/csvs/" + `${filename}.csv`)
             .pipe(parse({
                 delimiter: ',',
                 from_line: 1,
@@ -171,31 +168,21 @@ export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) =>
                 relax_column_count: true
             }))
             .pipe(transform(function (data) {
-
-                // if ((Number(data["Longitude"])<minlong) || (Number(data["Longitude"])>maxlong)) return null;
-                // if ((Number(data["Latitude"])<minlat) || (Number(data["Latitude"])>maxlat)) return null;  
-                // Skip data we don't want
+                //Filter out data below 5 kph
                 if (data["GroundSpeedGPS"] < 5) return null
-
-                // Transform data to a new structure
-
-
                 return { Time: data['Time'], Latitude: data["Latitude"], Longitude: data["Longitude"], GroundSpeedGPS: data['GroundSpeedGPS'], FuelInletTemp: data['FuelInletTemp'], FuelOutletTemp: data['FuelOutletTemp'], FuelMeterInlet_ccAmount: data['FuelMeterInlet_ccAmount'], FuelMeterInlet_ccRate: data['FuelMeterInlet_ccRate'], FuelMeterOutlet_ccAmount: data['FuelMeterOutlet_ccAmount'], FuelMeterOutlet_ccRate: data['FuelMeterOutlet_ccRate'] };
             })).on('data', (chunk) => {
 
-
-                // console.log(chunk)
-
                 if (onSwitch) {
                     if (data.count === 1) {
-                        if(Number(chunk['Time'])>86400){
-                            data.startDate = Number(filename.split('_')[1])+1
-                        } else{
-                             data.startDate = Number(filename.split('_')[1])
+                        if (Number(chunk['Time']) > 86400) {
+                            data.startDate = Number(filename.split('_')[1]) + 1
+                        } else {
+                            data.startDate = Number(filename.split('_')[1])
                         }
-                        if(Number(chunk['Time'])>86400){
-                            data.startTime = Number(chunk['Time'])-86400
-                        } else{
+                        if (Number(chunk['Time']) > 86400) {
+                            data.startTime = Number(chunk['Time']) - 86400
+                        } else {
                             data.startTime = Number(chunk['Time'])
                         }
                     }
@@ -211,7 +198,6 @@ export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) =>
                     data.dist += chunk["GroundSpeedGPS"] * 0.1 / 3600
                     data.count += 1
                     if (data.count % 25 === 0) {
-
                         data.coords.push([chunk["Longitude"], chunk["Latitude"]])
                         data.heatMap["features"].push(
                             {
@@ -225,31 +211,23 @@ export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) =>
                                 }
                             }
                         )
-
                     }
 
-
-                    if((Number(chunk["Longitude"]) != 0) && (Number(chunk["Latitude"]) != 0)){
-                        
+                    if ((Number(chunk["Longitude"]) != 0) && (Number(chunk["Latitude"]) != 0)) {
                         if ((Number(chunk["Longitude"]) < minlong) || (Number(chunk["Longitude"]) > maxlong)) {
                             stashData()
                         }
-    
+
                         if ((Number(chunk["Latitude"]) < minlat) || (Number(chunk["Latitude"]) > maxlat)) {
                             stashData()
                         }
                     }
-
-                    
                 }
                 if (!onSwitch) {
                     if (((Number(chunk["Longitude"]) > minlong) && (Number(chunk["Longitude"]) < maxlong)) && ((Number(chunk["Latitude"]) > minlat) && (Number(chunk["Latitude"]) < maxlat))) {
                         onSwitch = true;
                     }
                 }
-
-
-
             })
             .on('finish', () => {
 
@@ -259,10 +237,7 @@ export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) =>
                 resolve()
             })
     })
-    // const {coords, heatMap,...rest} = data
     return finalData
-
-
 }
 
 export const writeCSV = async (data) => {
@@ -274,7 +249,6 @@ export const writeCSV = async (data) => {
             return csv
         })
         .catch(err => console.error(err));
-
 }
 
 export const findPairs = async ({ data, processingDetails }) => {
@@ -284,8 +258,6 @@ export const findPairs = async ({ data, processingDetails }) => {
     let a, b
 
     await data.map(run1 => {
-
-
         data.map(run2 => {
             contains = false
             if (finalCompares?.length > 0) {
@@ -295,8 +267,7 @@ export const findPairs = async ({ data, processingDetails }) => {
                     }
                 }
             }
-
-
+            //For pairs to be generated, 2 runs must start near the same time, and be within a certain distance ran of each other
             if ((Math.abs((Number(run1.duration) - Number(run2.duration)) / Number(run1.duration)) < processingDetails.runPercentDiff) && (run1.startDate == run2.startDate) && (Number(run1.dist) > 15 && Number(run2.dist) > 15) && (run1.truckName !== run2.truckName) && (Math.abs(Number(run1.startTime) - Number(run2.startTime)) < (processingDetails.minutesDiffStart * 60)) && !contains) {
                 if (run1.truckName === "HY108") {
                     temp = [run1, run2]
@@ -304,30 +275,23 @@ export const findPairs = async ({ data, processingDetails }) => {
                     temp = [run2, run1]
                 }
 
-
+                //Lots of unit conversions
                 temp[0].diff = Number.parseFloat((temp[0].eMPG - temp[1].eMPG) / temp[0].eMPG * 100).toFixed(2)
                 temp[1].diff = Number.parseFloat((temp[1].eMPG - temp[0].eMPG) / temp[1].eMPG * 100).toFixed(2)
-
-
                 temp[0].timeDiff = Number.parseFloat((temp[0].duration - temp[1].duration) / temp[0].duration * 100).toFixed(2)
                 temp[1].timeDiff = Number.parseFloat((temp[1].duration - temp[0].duration) / temp[1].duration * 100).toFixed(2)
-
                 a = moment(temp[0].startDate, "YYYYMMDD");
                 temp[0].formattedDate = a.format("MMM Do YYYY");
-
                 b = moment(temp[1].startDate, "YYYYMMDD");
                 temp[1].formattedDate = b.format("MMM Do YYYY");
-
                 temp[0].formattedTime = new Date(temp[0].startTime * 1000).toUTCString().substring(17, 22)
                 temp[1].formattedTime = new Date(temp[1].startTime * 1000).toUTCString().substring(17, 22)
-                
                 finalCompares.push(temp)
             }
         })
     })
     processedData = [].concat(...finalCompares)
     let csvData = await writeCSV(processedData)
-     fileNameArr = [];
+    fileNameArr = [];
     return { finalCompares, csvData }
-
 }

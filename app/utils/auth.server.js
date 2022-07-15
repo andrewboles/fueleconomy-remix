@@ -3,6 +3,7 @@ import { Authenticator } from 'remix-auth'
 import { sessionStorage, getSession } from '~/utils/session.server'
 import { MicrosoftStrategy } from 'remix-auth-microsoft'
 
+//this utilized a handy remix auth package for tying OAuth2 credentials to Remix session storage
 export let authenticator = new Authenticator(sessionStorage)
 
 const microsoftStrategy = new MicrosoftStrategy(

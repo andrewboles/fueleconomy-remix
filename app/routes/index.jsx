@@ -1,7 +1,7 @@
 import { Form, useActionData, useTransition, Link, useLoaderData } from "@remix-run/react";
 import mapboxgl from "mapbox-gl";
 import React, { useEffect, useState } from "react";
-import { unstable_parseMultipartFormData, redirect, json } from "@remix-run/node";
+import { unstable_parseMultipartFormData} from "@remix-run/node";
 import {
   csvfileupload,
   filterparse,
@@ -16,6 +16,7 @@ import { getSession } from '../utils/session.server'
 import { Icon } from '@iconify/react';
 
 export async function loader({ request }) {
+  //Get login session from cookie
   const session = await getSession(
     request.headers.get("Cookie")
   );
@@ -25,8 +26,11 @@ export async function loader({ request }) {
 let map1, map2, draw;
 
 const createMaps = ({ setHeldGeos, defaultRoute }) => {
+  //Mapbox public key
   mapboxgl.accessToken =
     "pk.eyJ1IjoiYW5kcmV3bGIzIiwiYSI6ImNsMXc5ZzFxcDAycmczam1yc3dvaXU3MWIifQ.a4c0rnxuam5PUfbZYMv9jg";
+
+  //Create maps
   map1 = new mapboxgl.Map({
     container: "map1",
     style: "mapbox://styles/mapbox/streets-v11",
@@ -41,6 +45,7 @@ const createMaps = ({ setHeldGeos, defaultRoute }) => {
     zoom: 12,
   });
 
+  //Add markers for Hyliion HQ
   const marker1 = new mapboxgl.Marker({
     color: "#01b401",
   })
@@ -53,6 +58,7 @@ const createMaps = ({ setHeldGeos, defaultRoute }) => {
     .setLngLat([-97.800361, 30.502059])
     .addTo(map2);
 
+  //Setup ability to draw rectangle-shaped geofence
   const modes = MapboxDraw.modes;
   modes.draw_rectangle = DrawRectangle;
 
@@ -60,9 +66,11 @@ const createMaps = ({ setHeldGeos, defaultRoute }) => {
     modes: modes,
   });
 
+  //Add draw button
   map1.addControl(draw, "top-left");
   draw.changeMode("draw_rectangle");
 
+  //Change geofence coordinate state after rectangle is drawn
   map1.on("draw.create", function (feature) {
     let fetchedCoords = feature.features[0].geometry.coordinates[0];
     let longs = [];
@@ -83,6 +91,7 @@ const createMaps = ({ setHeldGeos, defaultRoute }) => {
 };
 
 const updateMap = (map, data, geos) => {
+  //clear any existing "speed" layer on map
   if (map.getLayer("speed")) {
     map.removeLayer("speed");
   }
@@ -92,6 +101,8 @@ const updateMap = (map, data, geos) => {
   let centerCoord = {};
   centerCoord.long = (geos.minlong + geos.maxlong) / 2;
   centerCoord.lat = (geos.minlat + geos.maxlat) / 2;
+
+  //recenter map on coordinates
   map.flyTo({
     center: [centerCoord.long, centerCoord.lat],
     zoom: 7.9,
@@ -102,6 +113,7 @@ const updateMap = (map, data, geos) => {
     data: data.heatMap,
   });
 
+  //Add heat map based on speed data
   map.addLayer(
     {
       id: "speed",
@@ -156,16 +168,21 @@ export async function action({ request }) {
   const runPercentDiff = forminfo.get('runPercentDiff')
   const processingDetails = { minutesDiffStart, runPercentDiff }
 
+  //Send each uploaded file through filter parse function on server
   let data = await Promise.all(
     fileNameArr.map(async (filename) => {
       return await filterparse(filename, minlong, maxlong, minlat, maxlat);
     })
   );
   console.log("files to parse:", data)
+
+  //send parsed data to function that will find matched pairs of data
   return await findPairs({ data: [].concat(...data), processingDetails });
 }
 
 export default function Index() {
+
+  //these keep state of the coordinate rectangle corners 
   const [heldGeos, setHeldGeos] = useState({
     minlong: -89.52549657858486,
     maxlong: -88.30086962453233,
@@ -185,6 +202,7 @@ export default function Index() {
   const transition = useTransition();
   const { session } = useLoaderData()
 
+  //create maps on load
   useEffect(() => {
     if (session?.data?.user && !map1) {
       console.log("creating map")
@@ -193,6 +211,7 @@ export default function Index() {
     }
   }, [session?.data?.user]);
 
+  //update maps when data populates
   useEffect(() => {
     if (data && data?.finalCompares?.length !== 0) {
       updateMap(map1, data?.finalCompares[0][0], geos.heldGeos);
@@ -200,6 +219,7 @@ export default function Index() {
     }
   }, [data, geos.heldGeos]);
 
+  //wire up map geofence delete and coordinate reset functionality
   useEffect(() => {
     if (session?.data?.user) {
       console.log("Adding delete coords")
@@ -229,66 +249,76 @@ export default function Index() {
   }, [defaultRoute, session?.data?.user])
 
   let submitting = transition.state === "submitting";
+
+  //this state variable tracks which of the data results cards is highlighted
   let [chosen, setChosen] = useState(0);
 
   return (
-    <>
-      {session.data.user ? <div className="main-container">
+    //if there's no user, show the login/intro page
+    !session.data.user ? <IntroBlock /> :
+      <div className="main-container">
         <div className="map-container">
           <div id="map1" className="map"></div>
           <div id="map2" className="map"></div>
         </div>
-
         <div className="second-section">
-          {data && data?.finalCompares?.length === 0 && (
-            <>
-              <h2 className="no-match">
-                No Matches Found in Data <Link to="/">Try Again</Link>
-              </h2>
-            </>
-          )}
-          {(data && (typeof data !== 'string')) ? (
-            <>
-              {data?.finalCompares?.length !== 0 && <Nav />}
-              {data?.finalCompares.map((run, i) => {
-                return (
-                  <ResultsCard
-                    geos={heldGeos}
-                    key={i}
-                    data={run}
-                    active={i === chosen}
-                    onClick={() => setChosen(i)}
-                  />
-                );
-              })}
-            </>
-          ) : submitting ? (
-            <Spinner />
-          ) : ( downloadedFiles ? 
-            <>
-              <FEForm heldGeos={heldGeos} setHeldGeos={setHeldGeos} defaultRoute={defaultRoute} setDefaultRoute={setDefaultRoute} data={data} />
-              <Form method="post" action="/auth/logout">
-                <button type="submit">Logout</button>
-              </Form>
-            </> : <DownloadPromptBlock setDownloadedFiles={setDownloadedFiles}/>
-          )}
+          {(() => {
+            //Conditional for allow download of demo files
+            if (!downloadedFiles) {
+              return <DownloadPromptBlock setDownloadedFiles={setDownloadedFiles} />
+            } else if (submitting) {
+              return <Spinner />
+            } else if (!data) {
+              return (
+                <>
+                  <FEForm heldGeos={heldGeos} setHeldGeos={setHeldGeos} defaultRoute={defaultRoute} setDefaultRoute={setDefaultRoute} data={data} />
+                  <Form method="post" action="/auth/logout">
+                    <button type="submit">Logout</button>
+                  </Form>
+                </>
+              )
+            } else if (data?.finalCompares?.length === 0) {
+              // this block protects for data with no matches
+              return (
+                <h2 className="no-match">
+                  No Matches Found in Data <Link to="/">Try Again</Link>
+                </h2>
+              )
+            } else if (typeof data !== 'string') {
+              //This conditional is for valid data display
+              return (
+                <>
+                  <Nav />
+                  {data?.finalCompares.map((run, i) => {
+                    return (
+                      <ResultsCard
+                        geos={heldGeos}
+                        key={i}
+                        data={run}
+                        active={i === chosen}
+                        onClick={() => setChosen(i)}
+                      />
+                    );
+                  })}
+                </>
+              )
+            }
+          })()}
         </div>
-      </div > : <IntroBlock/>
-        }
-    </>
-  );
+      </div>
+  )
 }
 
-const DownloadPromptBlock = ({setDownloadedFiles}) => {
+const DownloadPromptBlock = ({ setDownloadedFiles }) => {
 
   const onClick = () => {
     download('demodata.zip');
     setDownloadedFiles(true)
   }
 
-  return(
-    <div>
-      <h2>Click Below to download Anonomized, comma separated value(.lvm) mock fuel economy data. This functionality serves as a demonstration of full-stack React + Node upload/download concepts.</h2>
+  return (
+    <div className="download-block">
+      <h2>Click Below to download anonomized, comma separated value(.lvm) mock fuel economy data. This functionality serves as a demonstration of full-stack React + Node upload/download concepts.</h2>
       <button onClick={onClick}>Download Mock Data</button>
     </div>
   )
@@ -326,11 +356,6 @@ const Nav = () => {
             Download CSV
           </div>
         </li>
-        {/* <li>
-          <Form method="post" action="/auth/logout">
-            <button type="submit">Logout</button>
-          </Form>
-        </li> */}
       </ul>
     </nav>
   );
