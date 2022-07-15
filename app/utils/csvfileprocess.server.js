@@ -129,7 +129,6 @@ export const filterparse = async (filename, minlong, maxlong, minlat, maxlat) =>
             },
             diesel25C: 0
         }
-
     }
 
     //this function stashes the data after applying lots of unit conversions
